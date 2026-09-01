@@ -135,7 +135,14 @@ async function onBuy(p) {
 
   try {
     const data = await seckillBuy(p.id, username)
-    showToast('抢购请求已提交，订单处理中...')
+   if (data.code === 200) {
+  showToast('抢购请求已提交，订单处理中...')
+} else {
+  showToast(data.message);  
+  if (idx !== -1) {
+      products.value[idx].stock += 1
+    }
+}
   } catch (e) {
     if (idx !== -1) {
       products.value[idx].stock += 1
