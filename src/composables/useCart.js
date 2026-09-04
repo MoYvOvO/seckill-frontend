@@ -39,42 +39,44 @@ export function useCart() {
     items.value.reduce((sum, i) => sum + unitPrice(i) * i.quantity, 0),
   )
 
-  function add(product, quantity = 1) {
-    const existing = items.value.find((i) => i.id === product.id)
-    const maxQty = Math.max(0, product.stock)
-    if (maxQty <= 0) return { ok: false, message: '库存不足' }
-
-    if (existing) {
-      const next = Math.min(existing.quantity + quantity, maxQty)
-      if (next === existing.quantity) {
-        return { ok: false, message: '已达库存上限' }
-      }
-      existing.quantity = next
-    } else {
-      items.value.push({
-        id: product.id,
-        name: product.name,
-        image: product.image,
-        price: product.price,
-        seckillPrice: product.seckillPrice,
-        seckillStart: product.seckillStart,
-        seckillEnd: product.seckillEnd,
-        stock: product.stock,
-        quantity: Math.min(quantity, maxQty),
-      })
-    }
-    return { ok: true }
+ function add(product, quantity = 1) {
+  const start = new Date(product.seckillStart).getTime()
+  const end = new Date(product.seckillEnd).getTime()
+  const t = Date.now()
+  if (t < start) {
+    return { ok: false, message: '秒杀还未开始，暂不能加入购物车' }
+  }
+  if (t > end) {
+    return { ok: false, message: '秒杀已结束，无法加入购物车' }
   }
 
-  function updateQuantity(productId, quantity) {
-    const item = items.value.find((i) => i.id === productId)
-    if (!item) return
-    if (quantity <= 0) {
-      remove(productId)
-      return
-    }
-    item.quantity = Math.min(quantity, item.stock)
+  const existing = items.value.find((i) => i.id === product.id)
+  if (existing) {
+    return { ok: false, message: '每人限购 1 件' }
   }
+  items.value.push({
+    id: product.id,
+    name: product.name,
+    image: product.image,
+    price: product.price,
+    seckillPrice: product.seckillPrice,
+    seckillStart: product.seckillStart,
+    seckillEnd: product.seckillEnd,
+    stock: product.stock,
+    quantity: 1,
+  })
+  return { ok: true }
+}
+
+function updateQuantity(productId, quantity) {
+  const item = items.value.find((i) => i.id === productId)
+  if (!item) return
+  if (quantity <= 0) {
+    remove(productId)
+    return
+  }
+  item.quantity = Math.min(quantity, 1)
+}
 
   function remove(productId) {
     items.value = items.value.filter((i) => i.id !== productId)

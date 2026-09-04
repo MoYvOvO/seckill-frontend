@@ -35,32 +35,50 @@ async function refreshStock() {
   }
 }
 
+function friendlyMessage(msg = '') {
+  const text = String(msg)
+  if (text.includes('已购买') || text.includes('重复')) return '您已抢购过该商品，每人限购一件'
+  if (text.includes('售罄')) return '手慢了，商品已售罄'
+  if (text.includes('库存')) return '库存不足，请刷新后重试'
+  if (text.includes('未开始')) return '秒杀还没开始，再等等吧'
+  if (text.includes('已结束')) return '秒杀已经结束了'
+  return '抢购失败，请稍后重试'
+}
+
 async function checkout() {
   if (empty.value) return
   checkingOut.value = true
-  const failed = []
-  const success = []
+  const successItems = []
+  const failedItems = []
 
   for (const item of [...items.value]) {
+    let itemOk = true
     for (let i = 0; i < item.quantity; i++) {
       try {
         const data = await seckillBuy(item.id)
-        success.push(data.order.id)
+        if (!data || data.code !== 200) {
+          throw new Error(data?.message || '下单失败')
+        }
       } catch (e) {
-        failed.push(`${item.name}: ${e.message}`)
+        itemOk = false
+        failedItems.push(`${item.name}：${friendlyMessage(e.message)}`)
         break
       }
     }
+    if (itemOk) {
+      successItems.push(item.name)
+      remove(item.id) // 只移除真正下单成功的商品
+    }
   }
 
-  clear()
   checkingOut.value = false
 
-  if (success.length) {
-    showToast(`结算成功，共 ${success.length} 笔订单`)
-  }
-  if (failed.length) {
-    showToast(failed[0])
+  if (successItems.length && failedItems.length) {
+    showToast(`成功 ${successItems.length} 件，失败：${failedItems[0]}`)
+  } else if (successItems.length) {
+    showToast(`结算成功，共 ${successItems.length} 件商品`)
+  } else if (failedItems.length) {
+    showToast(failedItems[0])
   }
 }
 
@@ -108,7 +126,7 @@ onMounted(refreshStock)
               <button
                 type="button"
                 class="btn ghost sm"
-                :disabled="item.quantity >= item.stock"
+                :disabled="item.quantity >= 1"
                 @click="updateQuantity(item.id, item.quantity + 1)"
               >
                 +
