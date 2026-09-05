@@ -3,7 +3,6 @@ name: Deploy Frontend
 on:
   push:
     branches: [ "main" ]
-    
 
 jobs:
   build-and-deploy:
@@ -17,22 +16,30 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install and Build
         run: |
-          cd frontend
           npm ci
           npm run build
 
-      - name: Deploy to Server via SCP & SSH
-        uses: cross-the-world/ssh-scp-ssh-pipelines@latest
+      - name: Upload dist to Server via SCP
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.HOST }}
-          user: ${{ secrets.USERNAME }}
-          pass: ${{ secrets.PASSWORD }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD }}
           port: ${{ secrets.PORT }}
-          scp: |
-            ./frontend/dist => /root/frontend/
-          last_ssh: |
+          source: "./dist/*"
+          target: "/root/frontend/"
+          strip_components: 1
+
+      - name: Reload Nginx via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD }}
+          port: ${{ secrets.PORT }}
+          script: |
             nginx -t && systemctl reload nginx
