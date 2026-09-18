@@ -18,13 +18,18 @@ const loginPass = ref('')
 const loginLoading = ref(false)
 const loginError = ref('')
 const buyingId = ref(null)
-const toast = ref('')
+const notice = ref({
+  message: '',
+  type: 'info',
+})
+let noticeTimer = null
 
-function showToast(msg) {
-  toast.value = msg
-  setTimeout(() => {
-    toast.value = ''
-  }, 2800)
+function showToast(message, type = 'info') {
+  notice.value = { message, type }
+  if (noticeTimer) clearTimeout(noticeTimer)
+  noticeTimer = setTimeout(() => {
+    notice.value = { message: '', type: 'info' }
+  }, 4000)
 }
 
 const loggedIn = computed(() => !!user.value)
@@ -79,7 +84,7 @@ async function onLogin() {
 
     user.value = body.data
     loginPass.value = ''
-    showToast(`欢迎回来，${body.user.nickname || body.user.username}`)
+    showToast(`欢迎回来，${body.user.nickname || body.user.username}`, 'success')
   } catch (e) {
     loginError.value = e?.message || '登录失败'
   } finally {
@@ -105,18 +110,18 @@ function seckillWindow(product) {
 
 async function onBuy(product) {
   if (!loggedIn.value) {
-    showToast('请先登录后再抢购')
+    showToast('请先登录后再抢购', 'error')
     return
   }
 
   const status = seckillWindow(product)
   if (!status.active) {
-    showToast(status.ended ? '秒杀已结束' : '秒杀尚未开始')
+    showToast(status.ended ? '秒杀已结束' : '秒杀尚未开始', 'error')
     return
   }
 
   if (product.stock <= 0) {
-    showToast('库存已抢完')
+    showToast('库存已抢完', 'error')
     return
   }
 
@@ -128,18 +133,19 @@ async function onBuy(product) {
         const userObj = JSON.parse(storedUser)
         username = userObj.username
       } catch {
-        showToast('用户信息读取失败，请重新登录')
+        showToast('用户信息读取失败，请重新登录', 'error')
         return
       }
     }
   }
 
   if (!username) {
-    showToast('请先登录')
+    showToast('请先登录', 'error')
     return
   }
 
   buyingId.value = product.id
+  showToast('正在处理抢购...', 'pending')
   const productIndex = products.value.findIndex((item) => item.id === product.id)
 
   if (productIndex !== -1) {
@@ -149,9 +155,10 @@ async function onBuy(product) {
   try {
     const data = await seckillBuy(product.id, username)
     if (Number(data?.code) === 200) {
-      showToast('抢购成功，订单处理中...')
+      showToast('抢购成功，订单处理中...', 'success')
     } else {
-      showToast(friendlyPurchaseMessage(data?.message))
+      const message = friendlyPurchaseMessage(data?.message)
+      showToast(message, 'error')
       if (productIndex !== -1) {
         products.value[productIndex].stock += 1
       }
@@ -160,7 +167,8 @@ async function onBuy(product) {
     if (productIndex !== -1) {
       products.value[productIndex].stock += 1
     }
-    showToast(friendlyPurchaseMessage(e?.message))
+    const message = friendlyPurchaseMessage(e?.message)
+    showToast(message, 'error')
   } finally {
     buyingId.value = null
   }
@@ -168,15 +176,18 @@ async function onBuy(product) {
 
 function onAddCart(product) {
   if (!loggedIn.value) {
-    showToast('请先登录')
+    showToast('请先登录', 'error')
     return
   }
   if (cartProductIds.value.has(product.id)) {
-    showToast('该商品已在购物车中，每人限购一件')
+    showToast('该商品已在购物车中，每人限购一件', 'error')
     return
   }
   const result = add(product, 1)
-  showToast(result.ok ? '已加入购物车' : friendlyPurchaseMessage(result.message))
+  showToast(
+    result.ok ? '已加入购物车' : friendlyPurchaseMessage(result.message),
+    result.ok ? 'success' : 'error',
+  )
 }
 
 onMounted(async () => {
@@ -298,9 +309,20 @@ onMounted(async () => {
       </EmptyState>
     </section>
 
-    <Transition name="fade">
-      <div v-if="toast" class="toast" role="status" aria-live="polite">{{ toast }}</div>
-    </Transition>
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="notice.message"
+          class="notice"
+          :class="`is-${notice.type}`"
+          role="alert"
+          aria-live="assertive"
+        >
+          <span class="notice__dot" aria-hidden="true" />
+          {{ notice.message }}
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -584,22 +606,63 @@ onMounted(async () => {
   margin: 0 var(--space-5) var(--space-5);
 }
 
-.toast {
+.notice {
   position: fixed;
-  bottom: 1.5rem;
+  top: 80px;
   left: 50%;
-  z-index: 200;
-  max-width: min(90vw, 420px);
-  padding: 0.72rem 1.15rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  z-index: 1200;
+  display: flex;
+  max-width: min(90vw, 520px);
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: var(--text);
-  color: #ffffff;
+  background: var(--surface);
+  color: var(--text);
   box-shadow: var(--shadow-md);
   font-size: 0.86rem;
-  font-weight: 650;
+  font-weight: 750;
   text-align: center;
   transform: translateX(-50%);
+}
+
+.notice__dot {
+  width: 9px;
+  height: 9px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.notice.is-pending {
+  border-color: var(--border-strong);
+  background: var(--surface);
+}
+
+.notice.is-pending .notice__dot {
+  background: var(--accent);
+  animation: notice-pulse 0.9s ease-in-out infinite alternate;
+}
+
+.notice.is-success {
+  border-color: rgba(19, 122, 84, 0.24);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.notice.is-success .notice__dot {
+  background: var(--success);
+}
+
+.notice.is-error {
+  border-color: rgba(180, 35, 24, 0.24);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.notice.is-error .notice__dot {
+  background: var(--danger);
 }
 
 .fade-enter-active,
@@ -625,6 +688,16 @@ onMounted(async () => {
   }
 }
 
+@keyframes notice-pulse {
+  from {
+    opacity: 0.45;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 @media (max-width: 980px) {
   .campaign-panel {
     grid-template-columns: 1fr;
@@ -641,6 +714,14 @@ onMounted(async () => {
 }
 
 @media (max-width: 620px) {
+  .notice {
+    top: 72px;
+    width: calc(100% - 2rem);
+    max-width: none;
+    justify-content: flex-start;
+    text-align: left;
+  }
+
   .campaign-copy {
     padding: 2rem 1.25rem;
   }
