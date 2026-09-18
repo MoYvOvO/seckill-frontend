@@ -1,55 +1,3 @@
-<template>
-  <div class="ai-chatbot">
-    <!-- 悬浮按钮 -->
-    <div class="chat-toggle" @click="toggleChat">
-      <svg v-if="!isOpen" viewBox="0 0 24 24" width="28" height="28">
-        <path fill="white" d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
-      </svg>
-      <svg v-else viewBox="0 0 24 24" width="28" height="28">
-        <path fill="white" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-      </svg>
-    </div>
-
-    <!-- 聊天弹窗 -->
-    <div v-show="isOpen" class="chat-panel">
-      <div class="chat-header">
-        <span>🤖 AI 助手</span>
-        <span class="status">在线</span>
-      </div>
-
-      <div class="chat-messages" ref="messagesRef">
-        <div
-          v-for="(msg, idx) in messages"
-          :key="idx"
-          class="msg"
-          :class="msg.role === 'user' ? 'msg-user' : 'msg-assistant'"
-        >
-          <div class="msg-bubble">
-            <span class="msg-text">{{ msg.content }}</span>
-          </div>
-          <div class="msg-time">{{ formatTime(msg.timestamp) }}</div>
-        </div>
-        <div v-if="loading" class="msg msg-assistant">
-          <div class="msg-bubble">
-            <span class="typing">...</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="chat-input">
-        <input
-          v-model="inputMsg"
-          placeholder="输入消息..."
-          @keydown.enter="sendMessage"
-        />
-        <button @click="sendMessage" :disabled="loading || !inputMsg.trim()">
-          发送
-        </button>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup>
 import { ref, computed, nextTick } from 'vue'
 
@@ -57,11 +5,10 @@ const isOpen = ref(false)
 const loading = ref(false)
 const inputMsg = ref('')
 const messages = ref([
-  { role: 'assistant', content: '你好！我是 AI 助手，有什么可以帮你的？', timestamp: Date.now() }
+  { role: 'assistant', content: '你好，我是 AI 助手，有什么可以帮你的？', timestamp: Date.now() },
 ])
 const messagesRef = ref(null)
 
-// ========== 直接从 localStorage 取 userId，不依赖任何 store ==========
 const userId = computed(() => {
   const userStr = localStorage.getItem('mall_user')
   if (userStr) {
@@ -97,28 +44,28 @@ async function sendMessage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message: msg,
-        userId: userId.value
-      })
+        userId: userId.value,
+      }),
     })
     const result = await response.json()
     if (result.code === 200) {
       messages.value.push({
         role: 'assistant',
         content: result.data,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       })
     } else {
       messages.value.push({
         role: 'assistant',
         content: '抱歉，处理失败：' + result.message,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       })
     }
-  } catch (e) {
+  } catch {
     messages.value.push({
       role: 'assistant',
       content: '网络异常，请稍后重试',
-      timestamp: Date.now()
+      timestamp: Date.now(),
     })
   } finally {
     loading.value = false
@@ -134,117 +81,215 @@ function scrollToBottom() {
   })
 }
 
-function formatTime(ts) {
-  return new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+function formatTime(timestamp) {
+  return new Date(timestamp).toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 </script>
+
+<template>
+  <div class="ai-chatbot">
+    <button
+      type="button"
+      class="chat-toggle"
+      :aria-label="isOpen ? '关闭 AI 助手' : '打开 AI 助手'"
+      :aria-expanded="isOpen"
+      @click="toggleChat"
+    >
+      <svg v-if="!isOpen" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+        <path
+          fill="currentColor"
+          d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"
+        />
+      </svg>
+      <svg v-else viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+        <path
+          fill="currentColor"
+          d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+        />
+      </svg>
+    </button>
+
+    <section v-show="isOpen" class="chat-panel" aria-label="AI 助手对话窗口">
+      <header class="chat-header">
+        <div>
+          <span>AI 助手</span>
+          <strong>购物咨询</strong>
+        </div>
+        <span class="status">在线</span>
+      </header>
+
+      <div ref="messagesRef" class="chat-messages">
+        <div
+          v-for="(msg, index) in messages"
+          :key="index"
+          class="msg"
+          :class="msg.role === 'user' ? 'msg-user' : 'msg-assistant'"
+        >
+          <div class="msg-bubble">
+            <span class="msg-text">{{ msg.content }}</span>
+          </div>
+          <div class="msg-time">{{ formatTime(msg.timestamp) }}</div>
+        </div>
+        <div v-if="loading" class="msg msg-assistant">
+          <div class="msg-bubble">
+            <span class="typing">...</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-input">
+        <input
+          v-model="inputMsg"
+          placeholder="输入消息..."
+          aria-label="输入消息"
+          @keydown.enter="sendMessage"
+        />
+        <button type="button" @click="sendMessage" :disabled="loading || !inputMsg.trim()">
+          发送
+        </button>
+      </div>
+    </section>
+  </div>
+</template>
 
 <style scoped>
 .ai-chatbot {
   position: fixed;
-  bottom: 30px;
-  right: 30px;
+  right: clamp(1rem, 3vw, 2rem);
+  bottom: clamp(1rem, 3vw, 2rem);
   z-index: 999;
 }
 
 .chat-toggle {
+  display: grid;
   width: 56px;
   height: 56px;
+  margin-left: auto;
+  place-items: center;
+  border: 0;
   border-radius: 50%;
-  background: #4f46e5;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: var(--accent);
+  color: #ffffff;
+  box-shadow: 0 14px 34px rgba(229, 72, 45, 0.3);
   cursor: pointer;
-  box-shadow: 0 4px 20px rgba(79, 70, 229, 0.4);
-  transition: transform 0.2s;
+  transition:
+    background-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
 }
+
 .chat-toggle:hover {
-  transform: scale(1.05);
+  background: var(--accent-hover);
+  box-shadow: 0 18px 40px rgba(229, 72, 45, 0.38);
+  transform: translateY(-2px);
 }
 
 .chat-panel {
   position: absolute;
-  bottom: 72px;
   right: 0;
-  width: 380px;
-  height: 520px;
-  background: #ffffff;
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  bottom: 72px;
   display: flex;
-  flex-direction: column;
+  width: min(380px, calc(100vw - 2rem));
+  height: min(520px, calc(100dvh - 120px));
   overflow: hidden;
-  animation: slideUp 0.25s ease;
-}
-
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  animation: chat-enter 0.22s ease;
 }
 
 .chat-header {
-  padding: 16px 20px;
-  background: #4f46e5;
-  color: white;
-  font-weight: 600;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  flex-shrink: 0;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: var(--text);
+  color: #ffffff;
 }
-.status {
-  font-size: 12px;
-  background: rgba(255,255,255,0.2);
-  padding: 2px 12px;
-  border-radius: 999px;
+
+.chat-header span,
+.chat-header strong {
+  display: block;
+}
+
+.chat-header div > span {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.chat-header strong {
+  margin-top: 0.1rem;
+  font-size: 0.94rem;
+}
+
+.chat-header .status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-pill);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.68rem;
 }
 
 .chat-messages {
-  flex: 1;
-  padding: 16px 20px;
-  overflow-y: auto;
-  background: #f8f9fc;
   display: flex;
+  overflow-y: auto;
+  flex: 1;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: var(--surface-muted);
 }
+
 .msg {
   display: flex;
+  max-width: 84%;
   flex-direction: column;
-  max-width: 80%;
 }
+
 .msg-user {
   align-self: flex-end;
 }
+
 .msg-assistant {
   align-self: flex-start;
 }
+
 .msg-bubble {
-  padding: 10px 16px;
-  border-radius: 16px;
-  font-size: 14px;
-  line-height: 1.5;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius-md);
+  font-size: 0.84rem;
+  line-height: 1.55;
   word-break: break-word;
 }
+
 .msg-user .msg-bubble {
-  background: #4f46e5;
-  color: white;
-  border-bottom-right-radius: 4px;
+  background: var(--accent);
+  color: #ffffff;
 }
+
 .msg-assistant .msg-bubble {
-  background: white;
-  color: #1e293b;
-  border: 1px solid #e9edf4;
-  border-bottom-left-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
 }
+
 .msg-time {
-  font-size: 11px;
-  color: #94a3b8;
-  margin-top: 4px;
-  padding: 0 4px;
+  margin-top: 0.25rem;
+  padding: 0 0.2rem;
+  color: var(--text-muted);
+  font-size: 0.65rem;
 }
+
 .msg-user .msg-time {
   text-align: right;
 }
@@ -253,41 +298,81 @@ function formatTime(ts) {
   display: inline-block;
   animation: pulse 1.2s infinite;
 }
-@keyframes pulse {
-  0%, 80%, 100% { opacity: 0.3; }
-  40% { opacity: 1; }
-}
 
 .chat-input {
-  padding: 12px 16px;
-  border-top: 1px solid #eef2f6;
   display: flex;
-  gap: 10px;
-  background: white;
-  flex-shrink: 0;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
 }
+
 .chat-input input {
+  min-width: 0;
+  min-height: 40px;
   flex: 1;
-  padding: 8px 14px;
-  border: 1px solid #dce1eb;
-  border-radius: 40px;
-  font-size: 14px;
-  outline: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.82rem;
 }
-.chat-input input:focus {
-  border-color: #4f46e5;
-}
+
 .chat-input button {
-  background: #4f46e5;
-  color: white;
-  border: none;
-  padding: 8px 20px;
-  border-radius: 40px;
-  font-weight: 600;
+  min-width: 68px;
+  min-height: 40px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: #ffffff;
   cursor: pointer;
+  font-weight: 750;
 }
+
+.chat-input button:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
 .chat-input button:disabled {
-  opacity: 0.5;
   cursor: not-allowed;
+  opacity: 0.45;
+}
+
+@keyframes chat-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+  }
+
+  40% {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 520px) {
+  .ai-chatbot {
+    right: 1rem;
+    bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .chat-panel {
+    position: fixed;
+    right: 0.75rem;
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    left: 0.75rem;
+    width: auto;
+    height: min(560px, calc(100dvh - 112px));
+  }
 }
 </style>

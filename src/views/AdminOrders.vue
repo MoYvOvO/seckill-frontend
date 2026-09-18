@@ -1,6 +1,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { fetchOrders, updateOrderStatus } from '../api/orders'
+import PageHeader from '../components/ui/PageHeader.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
+import StatusBadge from '../components/ui/StatusBadge.vue'
 
 const list = ref([])
 const loading = ref(false)
@@ -13,43 +16,40 @@ const statusOptions = [
   { value: 'cancelled', label: '已取消' },
 ]
 
-const statusMap = Object.fromEntries(statusOptions.map((o) => [o.value, o.label]))
+const statusMap = Object.fromEntries(statusOptions.map((option) => [option.value, option.label]))
 
 async function load() {
   loading.value = true
   try {
-   const body = await fetchOrders()
-    console.log('订单返回的 body:', JSON.stringify(body, null, 2))  // 先打印确认
-
-    // 因为实际数据在 body.data 里，直接取这个数组
+    const body = await fetchOrders()
     list.value = body.data || []
   } finally {
     loading.value = false
   }
 }
 
-async function onStatusChange(row, ev) {
-  const prev = row.status
-  const status = ev.target.value
+async function onStatusChange(row, event) {
+  const previous = row.status
+  const status = event.target.value
   try {
     await updateOrderStatus(row.id, status)
     row.status = status
   } catch {
-    ev.target.value = prev
+    event.target.value = previous
   }
 }
 
-function formatMoney(n) {
-  return `¥${Number(n).toFixed(2)}`
+function formatMoney(value) {
+  return `¥${Number(value).toFixed(2)}`
 }
 
-function formatTime(iso) {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  return d.toLocaleString('zh-CN', { hour12: false })
+function formatTime(value) {
+  if (!value) return '--'
+  const date = new Date(value)
+  return date.toLocaleString('zh-CN', { hour12: false })
 }
 
-function statusClass(s) {
+function statusClass(status) {
   const map = {
     pending: 'warn',
     paid: 'ok',
@@ -58,24 +58,31 @@ function statusClass(s) {
     cancelled: 'bad',
     failed: 'bad',
   }
-  return map[s] || 'muted'
+  return map[status] || 'muted'
 }
 
 onMounted(load)
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <div>
-        <h1>订单管理</h1>
-        <p class="muted">查看订单列表与状态，可在表格内直接更新</p>
-      </div>
-      <button type="button" class="btn ghost" @click="load">刷新</button>
-    </header>
+  <div class="admin-orders page">
+    <PageHeader
+      eyebrow="运营后台"
+      title="订单管理"
+      description="查看订单列表和当前状态，并可直接更新订单流转状态。"
+    >
+      <template #actions>
+        <button type="button" class="btn ghost" :disabled="loading" @click="load">
+          {{ loading ? '刷新中...' : '刷新订单' }}
+        </button>
+      </template>
+    </PageHeader>
 
-    <div v-if="loading" class="state">加载中…</div>
-    <div v-else class="table-wrap card">
+    <div v-if="loading" class="table-loading" aria-label="正在加载订单">
+      <span v-for="item in 6" :key="item" />
+    </div>
+
+    <div v-else-if="list.length" class="table-wrap">
       <table class="data-table">
         <thead>
           <tr>
@@ -89,23 +96,24 @@ onMounted(load)
         </thead>
         <tbody>
           <tr v-for="row in list" :key="row.id">
-            <td class="mono">{{ row.id }}</td>
-            <td>{{ row.productName }}</td>
+            <td class="order-id">{{ row.id }}</td>
+            <td class="product-name">{{ row.productName }}</td>
             <td>{{ row.username || row.userId }}</td>
-            <td>{{ formatMoney(row.amount) }}</td>
+            <td class="amount">{{ formatMoney(row.amount) }}</td>
             <td>
               <div class="status-cell">
-                <span class="badge" :class="statusClass(row.status)">
-                  {{ statusMap[row.status] || row.status }}
-                </span>
+                <StatusBadge
+                  :label="statusMap[row.status] || row.status"
+                  :tone="statusClass(row.status)"
+                />
                 <select
                   class="select"
                   :value="row.status || 'pending'"
                   aria-label="更新订单状态"
                   @change="onStatusChange(row, $event)"
                 >
-                  <option v-for="o in statusOptions" :key="o.value" :value="o.value">
-                    {{ o.label }}
+                  <option v-for="option in statusOptions" :key="option.value" :value="option.value">
+                    {{ option.label }}
                   </option>
                 </select>
               </div>
@@ -114,103 +122,121 @@ onMounted(load)
           </tr>
         </tbody>
       </table>
-      <p v-if="!list.length" class="empty muted">暂无订单，用户在秒杀页抢购成功后会出现在这里</p>
     </div>
+
+    <EmptyState
+      v-else
+      title="暂无订单"
+      description="用户抢购成功后，订单会出现在这里。"
+    />
   </div>
 </template>
 
 <style scoped>
-.page-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+.admin-orders {
+  max-width: var(--content-width);
+  margin: 0 auto;
 }
-.page-head h1 {
-  margin: 0 0 0.25rem;
-  font-size: 1.5rem;
-  font-weight: 650;
+
+.table-wrap,
+.table-loading {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
-.muted {
-  color: var(--text-muted);
-  margin: 0;
-}
-.state,
-.empty {
-  padding: 2rem;
-  text-align: center;
-}
+
 .table-wrap {
-  overflow: auto;
+  overflow-x: auto;
 }
+
 .data-table {
   width: 100%;
+  min-width: 900px;
   border-collapse: collapse;
-  font-size: 0.9375rem;
+  font-size: 0.88rem;
 }
+
 .data-table th,
 .data-table td {
-  padding: 0.875rem 1rem;
-  text-align: left;
+  padding: 0.9rem 1rem;
   border-bottom: 1px solid var(--border);
+  text-align: left;
   vertical-align: middle;
 }
+
 .data-table th {
-  font-weight: 600;
+  background: var(--surface-muted);
   color: var(--text-muted);
-  font-size: 0.8125rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
-.data-table tr:last-child td {
-  border-bottom: none;
+
+.data-table tbody tr:last-child td {
+  border-bottom: 0;
 }
-.mono {
-  font-family: ui-monospace, monospace;
-  font-size: 0.8125rem;
+
+.data-table tbody tr:hover {
+  background: #fcfcfd;
 }
+
+.order-id {
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.78rem;
+}
+
+.product-name {
+  max-width: 280px;
+  font-weight: 700;
+}
+
+.amount {
+  color: var(--accent);
+  font-weight: 750;
+}
+
+.muted {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .status-cell {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  gap: var(--space-2);
 }
-.badge {
-  display: inline-block;
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-.badge.ok {
-  background: rgba(16, 185, 129, 0.15);
-  color: #059669;
-}
-.badge.warn {
-  background: rgba(245, 158, 11, 0.15);
-  color: #d97706;
-}
-.badge.info {
-  background: rgba(59, 130, 246, 0.15);
-  color: #2563eb;
-}
-.badge.muted {
-  background: var(--surface-2);
-  color: var(--text-muted);
-}
-.badge.bad {
-  background: rgba(239, 68, 68, 0.12);
-  color: #dc2626;
-}
+
 .select {
-  font: inherit;
-  font-size: 0.8125rem;
+  width: 108px;
+  min-height: 34px;
   padding: 0.35rem 0.5rem;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  max-width: 8rem;
+  font-size: 0.78rem;
+}
+
+.table-loading {
+  display: grid;
+  gap: 1px;
+  padding: var(--space-4);
+}
+
+.table-loading span {
+  height: 56px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+  animation: skeleton-pulse 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes skeleton-pulse {
+  from {
+    opacity: 0.55;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 </style>

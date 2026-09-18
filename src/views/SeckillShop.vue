@@ -5,6 +5,8 @@ import { fetchProducts } from '../api/products'
 import { login, fetchMe } from '../api/auth'
 import { seckillBuy } from '../api/seckill'
 import { useCart } from '../composables/useCart'
+import EmptyState from '../components/ui/EmptyState.vue'
+import SeckillProductCard from '../components/shop/SeckillProductCard.vue'
 
 const { add } = useCart()
 
@@ -31,7 +33,6 @@ async function loadProducts() {
   loading.value = true
   try {
     const body = await fetchProducts()
-    console.log('产品返回的 body:', JSON.stringify(body, null, 2))
     products.value = body.data || []
   } finally {
     loading.value = false
@@ -56,20 +57,16 @@ async function onLogin() {
       username: loginUser.value.trim(),
       password: loginPass.value,
     })
-    console.log('登录返回的 body:', JSON.stringify(body, null, 2))
     localStorage.setItem('mall_token', body.token || '')
     localStorage.setItem('mall_user', JSON.stringify(body.data))
-    
-    // ============ 🆕 存 role ============
-    // body.data 就是用户信息对象，从这里取 role
+
     const userInfo = body.data
     const role = userInfo.role || (userInfo.username === 'admin' ? 'admin' : 'user')
-    // const role ='user'
     localStorage.setItem('role', role)
 
     user.value = body.data
     loginPass.value = ''
-    showToast(`欢迎，${body.user.nickname || body.user.username}`)
+    showToast(`欢迎回来，${body.user.nickname || body.user.username}`)
   } catch (e) {
     loginError.value = e?.message || '登录失败'
   } finally {
@@ -84,31 +81,32 @@ function logout() {
   showToast('已退出登录')
 }
 
-function seckillWindow(p) {
-  const start = new Date(p.seckillStart).getTime()
-  const end = new Date(p.seckillEnd).getTime()
-  const t = Date.now()
-  if (t < start) return { label: '即将开始', active: false, ended: false }
-  if (t > end) return { label: '已结束', active: false, ended: true }
+function seckillWindow(product) {
+  const start = new Date(product.seckillStart).getTime()
+  const end = new Date(product.seckillEnd).getTime()
+  const now = Date.now()
+  if (now < start) return { label: '即将开始', active: false, ended: false }
+  if (now > end) return { label: '已结束', active: false, ended: true }
   return { label: '进行中', active: true, ended: false }
 }
 
-async function onBuy(p) {
+async function onBuy(product) {
   if (!loggedIn.value) {
     showToast('请先登录后再抢购')
     return
   }
-  const w = seckillWindow(p)
-  if (!w.active) {
-    showToast(w.ended ? '秒杀已结束' : '秒杀尚未开始')
+
+  const status = seckillWindow(product)
+  if (!status.active) {
+    showToast(status.ended ? '秒杀已结束' : '秒杀尚未开始')
     return
   }
-  if (p.stock <= 0) {
-    showToast('库存已抢光')
+
+  if (product.stock <= 0) {
+    showToast('库存已抢完')
     return
   }
-  console.log('user.value 的值：', JSON.stringify(user.value))
-  console.log('localStorage mall_user：', localStorage.getItem('mall_user'))
+
   let username = user.value?.username
   if (!username) {
     const storedUser = localStorage.getItem('mall_user')
@@ -116,8 +114,9 @@ async function onBuy(p) {
       try {
         const userObj = JSON.parse(storedUser)
         username = userObj.username
-      } catch (e) {
-        console.error('解析 mall_user 失败', e)
+      } catch {
+        showToast('用户信息读取失败，请重新登录')
+        return
       }
     }
   }
@@ -126,26 +125,27 @@ async function onBuy(p) {
     showToast('请先登录')
     return
   }
-  buyingId.value = p.id
-  const idx = products.value.findIndex((x) => x.id === p.id)
 
-  if (idx !== -1) {
-    products.value[idx].stock = Math.max(0, (products.value[idx].stock || 0) - 1)
+  buyingId.value = product.id
+  const productIndex = products.value.findIndex((item) => item.id === product.id)
+
+  if (productIndex !== -1) {
+    products.value[productIndex].stock = Math.max(0, (products.value[productIndex].stock || 0) - 1)
   }
 
   try {
-    const data = await seckillBuy(p.id, username)
-   if (data.code === 200) {
-  showToast('抢购请求已提交，订单处理中...')
-} else {
-  showToast(data.message);  
-  if (idx !== -1) {
-      products.value[idx].stock += 1
+    const data = await seckillBuy(product.id, username)
+    if (data.code === 200) {
+      showToast('抢购成功，订单处理中...')
+    } else {
+      showToast(data.message)
+      if (productIndex !== -1) {
+        products.value[productIndex].stock += 1
+      }
     }
-}
   } catch (e) {
-    if (idx !== -1) {
-      products.value[idx].stock += 1
+    if (productIndex !== -1) {
+      products.value[productIndex].stock += 1
     }
     showToast(e?.message || '抢购失败')
   } finally {
@@ -153,17 +153,13 @@ async function onBuy(p) {
   }
 }
 
-function onAddCart(p) {
+function onAddCart(product) {
   if (!loggedIn.value) {
     showToast('请先登录')
     return
   }
-  const res = add(p, 1)
-  showToast(res.ok ? '已加入购物车' : res.message)
-}
-
-function formatMoney(n) {
-  return `¥${Number(n).toFixed(2)}`
+  const result = add(product, 1)
+  showToast(result.ok ? '已加入购物车' : result.message)
 }
 
 onMounted(async () => {
@@ -173,361 +169,485 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="seckill">
-    <section class="hero card">
-      <div class="hero-text">
-        <p class="eyebrow">限时秒杀</p>
+  <div class="seckill page">
+    <section class="campaign-panel">
+      <div class="campaign-copy">
+        <span class="campaign-kicker">
+          <span class="campaign-kicker__dot" aria-hidden="true" />
+          限时秒杀
+        </span>
         <h1>极光秒杀会场</h1>
-        <p class="lead">登录后即可以秒杀价下单，库存实时扣减。</p>
+        <p>好价限时开放，库存实时扣减。登录后即可参与抢购，也可以先加入购物车统一下单。</p>
+        <div class="campaign-facts">
+          <span>实时库存</span>
+          <span>限时价格</span>
+          <span>每人限购 1 件</span>
+        </div>
       </div>
+
       <div class="auth-panel">
         <template v-if="!loggedIn">
-          <h2>用户登录</h2>
+          <div class="auth-panel__heading">
+            <span>账户</span>
+            <h2>登录后抢购</h2>
+          </div>
           <form class="login-form" @submit.prevent="onLogin">
-            <input
-              v-model="loginUser"
-              type="text"
-              autocomplete="username"
-              placeholder="用户名"
-              required
-            />
-            <input
-              v-model="loginPass"
-              type="password"
-              autocomplete="current-password"
-              placeholder="密码"
-              required
-            />
-            <p v-if="loginError" class="error">{{ loginError }}</p>
-            <div class="btn-group">
+            <label class="field">
+              <span>用户名</span>
+              <input
+                v-model="loginUser"
+                type="text"
+                autocomplete="username"
+                placeholder="请输入用户名"
+                required
+              />
+            </label>
+            <label class="field">
+              <span>密码</span>
+              <input
+                v-model="loginPass"
+                type="password"
+                autocomplete="current-password"
+                placeholder="请输入密码"
+                required
+              />
+            </label>
+            <p v-if="loginError" class="form-message is-error">{{ loginError }}</p>
+            <div class="auth-actions">
               <button type="submit" class="btn primary" :disabled="loginLoading">
-                {{ loginLoading ? '登录中…' : '登录' }}
+                {{ loginLoading ? '登录中...' : '登录' }}
               </button>
-              <RouterLink to="/register" class="btn secondary">
-                注册
-              </RouterLink>
+              <RouterLink to="/register" class="btn secondary">注册</RouterLink>
             </div>
-            <p class="hint muted">演示环境任意非空用户名与密码即可</p>
+            <p class="auth-hint">演示环境输入任意非空用户名和密码即可登录</p>
           </form>
         </template>
+
         <template v-else>
-          <div class="user-card">
-            <div class="avatar">{{ (user.username || '?').slice(0, 1).toUpperCase() }}</div>
-            <div>
-              <div class="uname">{{ user.nickname || user.username }}</div>
-              <div class="muted small">已登录，可参与抢购</div>
+          <div class="user-summary">
+            <div class="user-summary__avatar">
+              {{ (user.username || '?').slice(0, 1).toUpperCase() }}
             </div>
-            <button type="button" class="btn ghost" @click="logout">退出</button>
+            <div class="user-summary__copy">
+              <span>当前账户</span>
+              <strong>{{ user.nickname || user.username }}</strong>
+              <p>已登录，可参与秒杀和加入购物车</p>
+            </div>
+            <button type="button" class="btn ghost sm" @click="logout">退出</button>
           </div>
         </template>
       </div>
     </section>
 
     <section class="products-section">
-      <div class="section-head">
-        <h2>秒杀商品</h2>
+      <header class="section-heading">
+        <div>
+          <p>今日场次</p>
+          <h2>秒杀商品</h2>
+        </div>
         <button type="button" class="btn ghost sm" :disabled="loading" @click="loadProducts">
-          {{ loading ? '刷新中…' : '刷新列表' }}
+          {{ loading ? '刷新中...' : '刷新列表' }}
         </button>
+      </header>
+
+      <div v-if="loading && !products.length" class="product-skeletons" aria-label="正在加载商品">
+        <div v-for="item in 3" :key="item" class="product-skeleton">
+          <span />
+          <span />
+          <span />
+        </div>
       </div>
-      <div v-if="loading && !products.length" class="state">加载商品中…</div>
-      <div v-else class="grid">
-        <article v-for="p in products" :key="p.id" class="product card">
-          <div class="img-wrap">
-            <img :src="p.image" :alt="p.name" loading="lazy" />
-            <span class="pill" :class="{ on: seckillWindow(p).active, off: !seckillWindow(p).active }">
-              {{ seckillWindow(p).label }}
-            </span>
-          </div>
-          <div class="body">
-            <h3>{{ p.name }}</h3>
-            <p class="desc muted">{{ p.description }}</p>
-            <div class="prices">
-              <span class="seckill">{{ formatMoney(p.seckillPrice) }}</span>
-              <span class="orig">{{ formatMoney(p.price) }}</span>
-            </div>
-            <p class="stock muted small">剩余库存 {{ p.stock }}</p>
-            <div class="btn-row">
-              <button
-                type="button"
-                class="btn ghost wide"
-                :disabled="!loggedIn || p.stock <= 0"
-                @click="onAddCart(p)"
-              >
-                加入购物车
-              </button>
-              <button
-                type="button"
-                class="btn primary wide buy"
-                :disabled="
-                  buyingId === p.id || p.stock <= 0 || !seckillWindow(p).active || !loggedIn
-                "
-                @click="onBuy(p)"
-              >
-                <template v-if="buyingId === p.id">抢购中…</template>
-                <template v-else-if="!loggedIn">登录后抢购</template>
-                <template v-else-if="p.stock <= 0">已抢光</template>
-                <template v-else-if="!seckillWindow(p).active">不可抢购</template>
-                <template v-else>立即抢购</template>
-              </button>
-            </div>
-          </div>
-        </article>
+
+      <div v-else-if="products.length" class="product-grid">
+        <SeckillProductCard
+          v-for="product in products"
+          :key="product.id"
+          :product="product"
+          :time-state="seckillWindow(product)"
+          :logged-in="loggedIn"
+          :buying="buyingId === product.id"
+          @add-to-cart="onAddCart"
+          @buy="onBuy"
+        />
       </div>
+
+      <EmptyState
+        v-else
+        title="暂时没有秒杀商品"
+        description="商品上架后会显示在这里，你可以稍后刷新列表。"
+      >
+        <button type="button" class="btn ghost" @click="loadProducts">重新加载</button>
+      </EmptyState>
     </section>
 
     <Transition name="fade">
-      <div v-if="toast" class="toast">{{ toast }}</div>
+      <div v-if="toast" class="toast" role="status" aria-live="polite">{{ toast }}</div>
     </Transition>
   </div>
 </template>
 
 <style scoped>
 .seckill {
-  max-width: 1120px;
+  max-width: var(--content-width);
   margin: 0 auto;
 }
-.hero {
+
+.campaign-panel {
   display: grid;
-  grid-template-columns: 1fr minmax(260px, 320px);
-  gap: 2rem;
-  padding: 2rem;
-  margin-bottom: 2rem;
-  align-items: stretch;
+  overflow: hidden;
+  grid-template-columns: minmax(0, 1.4fr) minmax(310px, 0.8fr);
+  margin-bottom: clamp(2rem, 5vw, 3.5rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
-@media (max-width: 840px) {
-  .hero {
-    grid-template-columns: 1fr;
-  }
+
+.campaign-copy {
+  display: flex;
+  min-height: 330px;
+  justify-content: center;
+  flex-direction: column;
+  padding: clamp(2rem, 5vw, 4rem);
+  background:
+    linear-gradient(90deg, var(--accent-soft), transparent 64%),
+    var(--surface);
 }
-.hero-text h1 {
-  margin: 0.35rem 0 0.75rem;
-  font-size: clamp(1.75rem, 4vw, 2.25rem);
-  font-weight: 700;
-  letter-spacing: -0.03em;
-}
-.eyebrow {
-  margin: 0;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+
+.campaign-kicker {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.5rem;
   color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0.1em;
 }
-.lead {
+
+.campaign-kicker__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 5px var(--accent-soft);
+}
+
+.campaign-copy h1 {
+  max-width: 10ch;
+  margin: var(--space-4) 0 var(--space-3);
+  font-size: clamp(2.3rem, 6vw, 4.2rem);
+  line-height: 0.98;
+  letter-spacing: -0.055em;
+}
+
+.campaign-copy > p {
+  max-width: 48ch;
   margin: 0;
-  color: var(--text-muted);
-  line-height: 1.6;
-  max-width: 36ch;
+  color: var(--text-soft);
+  font-size: 0.96rem;
+  line-height: 1.7;
 }
-.auth-panel h2 {
-  margin: 0 0 1rem;
-  font-size: 1rem;
+
+.campaign-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
 }
+
+.campaign-facts span {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text-soft);
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.auth-panel {
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+  padding: clamp(1.5rem, 4vw, 2.25rem);
+  background: var(--text);
+  color: #ffffff;
+}
+
+.auth-panel__heading > span {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.75rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+
+.auth-panel__heading h2 {
+  margin: var(--space-1) 0 var(--space-5);
+  font-size: 1.35rem;
+}
+
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: var(--space-4);
 }
-.login-form input {
-  font: inherit;
-  padding: 0.65rem 0.85rem;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-}
-.error {
-  margin: 0;
-  font-size: 0.8125rem;
-  color: #dc2626;
-}
-.hint {
-  margin: 0.25rem 0 0;
-  font-size: 0.75rem;
-}
-.user-card {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-.avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, var(--accent), #6366f1);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 1.125rem;
-}
-.uname {
-  font-weight: 650;
-}
-.muted {
-  color: var(--text-muted);
-}
-.muted.small {
-  font-size: 0.8125rem;
-}
-.section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1rem;
-}
-.section-head h2 {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 650;
-}
-.state {
-  padding: 3rem;
-  text-align: center;
-  color: var(--text-muted);
-}
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 1.25rem;
-}
-.product {
-  overflow: hidden;
+
+.field {
   display: flex;
   flex-direction: column;
-  padding: 0;
+  gap: var(--space-2);
 }
-.img-wrap {
-  position: relative;
-  aspect-ratio: 4 / 3;
-  background: var(--surface-2);
+
+.field > span {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.78rem;
+  font-weight: 650;
 }
-.img-wrap img {
+
+.field input {
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  padding: 0.68rem 0.8rem;
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
 }
-.pill {
-  position: absolute;
-  top: 0.75rem;
-  left: 0.75rem;
-  padding: 0.25rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.6875rem;
+
+.field input:hover {
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.field input::placeholder {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.form-message {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.form-message.is-error {
+  color: #ffb4aa;
+}
+
+.auth-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.auth-panel .btn.secondary {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: transparent;
+  color: #ffffff;
+}
+
+.auth-panel .btn.secondary:hover {
+  border-color: rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.auth-hint {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.user-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.user-summary__avatar {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 1.25rem;
+  font-weight: 850;
+}
+
+.user-summary__copy {
+  min-width: 0;
+}
+
+.user-summary__copy > span {
+  display: block;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
 }
-.pill.on {
-  background: rgba(16, 185, 129, 0.95);
-  color: #fff;
-}
-.pill.off {
-  background: rgba(15, 23, 42, 0.55);
-  color: #fff;
-  backdrop-filter: blur(4px);
-}
-.body {
-  padding: 1.1rem 1.25rem 1.25rem;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-}
-.body h3 {
-  margin: 0 0 0.35rem;
+
+.user-summary__copy strong {
+  display: block;
+  overflow: hidden;
+  margin-top: 0.15rem;
   font-size: 1.05rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.desc {
-  margin: 0 0 0.75rem;
-  font-size: 0.8125rem;
-  line-height: 1.45;
-  flex: 1;
+
+.user-summary__copy p {
+  margin: var(--space-2) 0 0;
+  color: rgba(255, 255, 255, 0.54);
+  font-size: 0.76rem;
 }
-.prices {
+
+.user-summary .btn {
+  grid-column: 2;
+  width: fit-content;
+  border-color: rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: #ffffff;
+}
+
+.section-heading {
   display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  margin-bottom: 0.35rem;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
 }
-.seckill {
-  font-size: 1.35rem;
-  font-weight: 800;
+
+.section-heading p {
+  margin: 0 0 var(--space-1);
   color: var(--accent);
-  letter-spacing: -0.02em;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
-.orig {
-  font-size: 0.8125rem;
-  color: var(--text-muted);
-  text-decoration: line-through;
+
+.section-heading h2 {
+  margin: 0;
+  font-size: clamp(1.4rem, 3vw, 1.85rem);
+  letter-spacing: -0.025em;
 }
-.stock {
-  margin: 0 0 1rem;
+
+.product-grid,
+.product-skeletons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-5);
 }
-.btn-row {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-top: auto;
+
+.product-skeleton {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
 }
-.buy {
-  margin-top: 0;
+
+.product-skeleton span {
+  display: block;
+  background: var(--surface-strong);
+  animation: skeleton-pulse 1.4s ease-in-out infinite alternate;
 }
+
+.product-skeleton span:first-child {
+  aspect-ratio: 4 / 3;
+}
+
+.product-skeleton span:nth-child(2) {
+  width: 72%;
+  height: 20px;
+  margin: var(--space-5) var(--space-5) var(--space-3);
+}
+
+.product-skeleton span:last-child {
+  width: 46%;
+  height: 34px;
+  margin: 0 var(--space-5) var(--space-5);
+}
+
 .toast {
   position: fixed;
   bottom: 1.5rem;
   left: 50%;
-  transform: translateX(-50%);
-  padding: 0.65rem 1.25rem;
-  border-radius: 999px;
-  background: var(--text);
-  color: var(--surface);
-  font-size: 0.875rem;
-  font-weight: 500;
-  box-shadow: var(--shadow-lg);
   z-index: 200;
   max-width: min(90vw, 420px);
+  padding: 0.72rem 1.15rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  background: var(--text);
+  color: #ffffff;
+  box-shadow: var(--shadow-md);
+  font-size: 0.86rem;
+  font-weight: 650;
   text-align: center;
+  transform: translateX(-50%);
 }
+
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s ease;
 }
+
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
   transform: translateX(-50%) translateY(8px);
 }
-.wide {
-  width: 100%;
+
+@keyframes skeleton-pulse {
+  from {
+    opacity: 0.55;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
-/* 新增：登录和注册按钮并排 */
-.btn-group {
-  display: flex;
-  gap: 0.65rem;
+@media (max-width: 980px) {
+  .campaign-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .campaign-copy {
+    min-height: auto;
+  }
+
+  .product-grid,
+  .product-skeletons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
-.btn-group .btn {
-  flex: 1;
-  text-align: center;
-  justify-content: center;
-}
-.btn.secondary {
-  background: var(--surface-2);
-  color: var(--text);
-  border: 1px solid var(--border);
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.65rem 0.85rem;
-  border-radius: 10px;
-  font-weight: 600;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.btn.secondary:hover {
-  background: var(--border);
+
+@media (max-width: 620px) {
+  .campaign-copy {
+    padding: 2rem 1.25rem;
+  }
+
+  .campaign-copy h1 {
+    max-width: 8ch;
+    font-size: 2.45rem;
+  }
+
+  .auth-panel {
+    padding: 1.5rem 1.25rem;
+  }
+
+  .product-grid,
+  .product-skeletons {
+    grid-template-columns: 1fr;
+  }
+
+  .section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .section-heading .btn {
+    width: 100%;
+  }
 }
 </style>

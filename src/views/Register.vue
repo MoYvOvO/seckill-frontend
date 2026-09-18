@@ -42,7 +42,7 @@ async function onSubmit() {
       password: pass,
       nickname: nick || name,
     })
-    success.value = '注册成功，即将跳转至秒杀会场…'
+    success.value = '注册成功，即将跳转至秒杀会场'
     setTimeout(() => router.push('/seckill'), 1500)
   } catch (e) {
     error.value = e?.message || '注册失败'
@@ -54,144 +54,294 @@ async function onSubmit() {
 
 <template>
   <div class="register page">
-    <section class="card panel">
-      <p class="eyebrow">新用户</p>
-      <h1>创建账号</h1>
-      <p class="lead muted">注册后即可登录参与秒杀抢购。</p>
+    <section class="register-shell">
+      <aside class="register-context">
+        <RouterLink to="/seckill" class="back-link">返回秒杀会场</RouterLink>
+        <div>
+          <span class="register-context__label">极光商城</span>
+          <h1>创建账户，开始抢购</h1>
+          <p>注册后可以参与限时秒杀、同步购物车，并查看自己的订单状态。</p>
+        </div>
+        <div class="register-facts">
+          <div>
+            <strong>01</strong>
+            <span>限时秒杀</span>
+          </div>
+          <div>
+            <strong>02</strong>
+            <span>实时库存</span>
+          </div>
+          <div>
+            <strong>03</strong>
+            <span>订单跟踪</span>
+          </div>
+        </div>
+      </aside>
 
-      <form class="register-form" @submit.prevent="onSubmit">
-        <label class="field">
-          <span>用户名</span>
-          <input
-            v-model="username"
-            type="text"
-            autocomplete="username"
-            placeholder="请输入用户名"
-            required
-          />
-        </label>
-        <label class="field">
-          <span>昵称（可选）</span>
-          <input
-            v-model="nickname"
-            type="text"
-            autocomplete="nickname"
-            placeholder="显示名称，默认同用户名"
-          />
-        </label>
-        <label class="field">
-          <span>密码</span>
-          <input
-            v-model="password"
-            type="password"
-            autocomplete="new-password"
-            placeholder="至少 6 位"
-            required
-          />
-        </label>
-        <label class="field">
-          <span>确认密码</span>
-          <input
-            v-model="confirmPassword"
-            type="password"
-            autocomplete="new-password"
-            placeholder="再次输入密码"
-            required
-          />
-        </label>
+      <div class="register-form-panel">
+        <div class="register-form-panel__heading">
+          <span>新用户</span>
+          <h2>注册账户</h2>
+          <p>填写基础信息即可完成注册。</p>
+        </div>
 
-        <p v-if="error" class="error">{{ error }}</p>
-        <p v-if="success" class="success">{{ success }}</p>
+        <form class="register-form" @submit.prevent="onSubmit">
+          <label class="field">
+            <span>用户名</span>
+            <input
+              v-model="username"
+              type="text"
+              autocomplete="username"
+              placeholder="请输入用户名"
+              required
+            />
+          </label>
 
-        <button type="submit" class="btn primary wide" :disabled="loading">
-          {{ loading ? '注册中…' : '立即注册' }}
-        </button>
-      </form>
+          <label class="field">
+            <span>昵称（可选）</span>
+            <input
+              v-model="nickname"
+              type="text"
+              autocomplete="nickname"
+              placeholder="默认与用户名相同"
+            />
+          </label>
 
-      <p class="footer muted">
-        已有账号？
-        <RouterLink to="/seckill" class="link">前往登录</RouterLink>
-      </p>
+          <label class="field">
+            <span>密码</span>
+            <input
+              v-model="password"
+              type="password"
+              autocomplete="new-password"
+              placeholder="至少 6 位"
+              required
+            />
+          </label>
+
+          <label class="field">
+            <span>确认密码</span>
+            <input
+              v-model="confirmPassword"
+              type="password"
+              autocomplete="new-password"
+              placeholder="再次输入密码"
+              required
+            />
+          </label>
+
+          <p v-if="error" class="form-message is-error" role="alert">{{ error }}</p>
+          <p v-if="success" class="form-message is-success" role="status">{{ success }}</p>
+
+          <button type="submit" class="btn primary wide" :disabled="loading">
+            {{ loading ? '注册中...' : '立即注册' }}
+          </button>
+        </form>
+
+        <p class="register-form-panel__footer">
+          已有账户？
+          <RouterLink to="/seckill">前往登录</RouterLink>
+        </p>
+      </div>
     </section>
   </div>
 </template>
 
 <style scoped>
 .register {
-  max-width: 480px;
+  display: grid;
+  max-width: 980px;
+  min-height: min(680px, calc(100dvh - 150px));
   margin: 0 auto;
+  place-items: center;
 }
-.panel {
-  padding: 2rem;
+
+.register-shell {
+  display: grid;
+  width: 100%;
+  overflow: hidden;
+  grid-template-columns: minmax(0, 0.9fr) minmax(380px, 1.1fr);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
 }
-.panel h1 {
-  margin: 0.35rem 0 0.75rem;
-  font-size: clamp(1.5rem, 4vw, 1.85rem);
-  font-weight: 700;
-  letter-spacing: -0.03em;
-}
-.eyebrow {
-  margin: 0;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-.lead {
-  margin: 0 0 1.5rem;
-  line-height: 1.6;
-}
-.register-form {
+
+.register-context {
   display: flex;
+  justify-content: space-between;
   flex-direction: column;
-  gap: 1rem;
+  padding: clamp(2rem, 5vw, 3.5rem);
+  background: var(--text);
+  color: #ffffff;
 }
+
+.back-link {
+  width: fit-content;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.back-link:hover {
+  color: #ffffff;
+}
+
+.register-context__label {
+  color: var(--accent);
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+}
+
+.register-context h1 {
+  max-width: 9ch;
+  margin: var(--space-4) 0 var(--space-4);
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+}
+
+.register-context p {
+  max-width: 36ch;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.62);
+  line-height: 1.7;
+}
+
+.register-facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+  margin-top: var(--space-10);
+}
+
+.register-facts div {
+  padding-top: var(--space-3);
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.register-facts strong,
+.register-facts span {
+  display: block;
+}
+
+.register-facts strong {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.7rem;
+}
+
+.register-facts span {
+  margin-top: var(--space-1);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.register-form-panel {
+  padding: clamp(2rem, 5vw, 3.5rem);
+}
+
+.register-form-panel__heading > span {
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.register-form-panel__heading h2 {
+  margin: var(--space-1) 0 var(--space-2);
+  font-size: 1.65rem;
+  letter-spacing: -0.025em;
+}
+
+.register-form-panel__heading p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.register-form {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-2);
 }
+
 .field span {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--text-muted);
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 700;
 }
+
 .field input {
-  font: inherit;
-  padding: 0.65rem 0.85rem;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
+  width: 100%;
+  padding: 0.68rem 0.8rem;
 }
-.error {
+
+.form-message {
   margin: 0;
-  font-size: 0.8125rem;
-  color: #dc2626;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: 0.8rem;
 }
-.success {
-  margin: 0;
-  font-size: 0.8125rem;
-  color: #059669;
+
+.form-message.is-error {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
-.footer {
-  margin: 1.25rem 0 0;
-  font-size: 0.875rem;
+
+.form-message.is-success {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.register-form-panel__footer {
+  margin: var(--space-5) 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
   text-align: center;
 }
-.link {
+
+.register-form-panel__footer a {
   color: var(--accent);
-  font-weight: 600;
+  font-weight: 750;
   text-decoration: none;
 }
-.link:hover {
+
+.register-form-panel__footer a:hover {
   text-decoration: underline;
 }
-.muted {
-  color: var(--text-muted);
+
+@media (max-width: 760px) {
+  .register {
+    min-height: auto;
+  }
+
+  .register-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .register-context {
+    gap: var(--space-8);
+  }
+
+  .register-context h1 {
+    max-width: 12ch;
+  }
 }
-.wide {
-  width: 100%;
+
+@media (max-width: 480px) {
+  .register-form-panel {
+    padding: 1.5rem 1.25rem;
+  }
+
+  .register-facts {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

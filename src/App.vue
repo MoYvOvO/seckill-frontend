@@ -3,6 +3,7 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter, RouterLink, RouterView } from 'vue-router'
 import { useCart } from './composables/useCart'
 import AiChatbot from './components/AiChatbot.vue'
+
 const route = useRoute()
 const router = useRouter()
 const { count } = useCart()
@@ -10,6 +11,7 @@ const { count } = useCart()
 function getToken() {
   return localStorage.getItem('mall_token')
 }
+
 function getRole() {
   return localStorage.getItem('role') || ''
 }
@@ -27,9 +29,11 @@ function handleStorageChange(e) {
     refreshAuthState()
   }
 }
+
 window.addEventListener('storage', handleStorageChange)
 
 let timer = null
+
 onMounted(() => {
   timer = setInterval(() => {
     const currentToken = getToken()
@@ -72,7 +76,7 @@ const active = computed(() => route.path)
   <div class="app-shell">
     <header class="topbar">
       <div class="brand" @click="router.push('/seckill')">
-        <span class="logo" aria-hidden="true" />
+        <span class="logo" aria-hidden="true">极</span>
         <span class="brand-name">极光商城</span>
       </div>
       <nav class="nav" aria-label="主导航">
@@ -97,84 +101,138 @@ const active = computed(() => route.path)
 
 <style scoped>
 .app-shell {
-  min-height: 100vh;
   display: flex;
+  min-height: 100dvh;
   flex-direction: column;
-  background: radial-gradient(1200px 600px at 10% -10%, rgba(14, 165, 233, 0.12), transparent),
-    radial-gradient(900px 500px at 100% 0%, rgba(99, 102, 241, 0.1), transparent),
-    var(--bg);
+  background:
+    linear-gradient(rgba(24, 32, 42, 0.025) 1px, transparent 1px),
+    var(--canvas);
+  background-size: 100% 32px;
 }
+
 .topbar {
   position: sticky;
   top: 0;
   z-index: 50;
   display: flex;
+  min-height: 64px;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.75rem 1.5rem;
+  padding: 0.7rem clamp(1rem, 4vw, 2.5rem);
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
-  backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
 }
+
 .brand {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.65rem;
   cursor: pointer;
   user-select: none;
 }
+
 .logo {
+  display: grid;
   width: 32px;
   height: 32px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #0ea5e9, #6366f1);
-  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.35);
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: var(--text);
+  color: #ffffff;
+  font-size: 0.84rem;
+  font-weight: 850;
 }
+
 .brand-name {
-  font-weight: 700;
-  font-size: 1.05rem;
-  letter-spacing: -0.02em;
+  font-size: 1rem;
+  font-weight: 850;
+  letter-spacing: -0.015em;
 }
+
 .nav {
   display: flex;
+  min-width: 0;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
+
 .nav-link {
+  position: relative;
   display: inline-flex;
+  min-height: 38px;
   align-items: center;
-  padding: 0.45rem 0.9rem;
-  border-radius: 999px;
-  font-size: 0.875rem;
-  font-weight: 500;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 650;
   text-decoration: none;
-  transition: background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
+
 .badge {
   margin-left: 0.35rem;
   padding: 0.1rem 0.45rem;
-  border-radius: 999px;
-  font-size: 0.6875rem;
-  font-weight: 700;
+  border-radius: var(--radius-pill);
   background: var(--accent);
-  color: #fff;
+  color: #ffffff;
+  font-size: 0.6875rem;
+  font-weight: 750;
 }
+
 .nav-link:hover {
+  background: var(--surface-muted);
   color: var(--text);
-  background: var(--surface-2);
 }
+
 .nav-link.active {
+  background: var(--accent-soft);
   color: var(--text);
-  background: var(--surface-2);
-  box-shadow: inset 0 0 0 1px var(--border);
 }
+
+.nav-link.active::after {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.2rem;
+  left: 0.75rem;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  content: "";
+}
+
 .main {
   flex: 1;
-  padding: 1.5rem clamp(1rem, 4vw, 2.5rem) 2.5rem;
-  max-width: 1200px;
   width: 100%;
+  max-width: var(--page-width);
   margin: 0 auto;
+  padding: clamp(1.25rem, 3vw, 2rem) clamp(1rem, 4vw, 2.5rem) 4rem;
+}
+
+@media (max-width: 680px) {
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .nav {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .main {
+    padding-top: 1.25rem;
+  }
 }
 </style>
