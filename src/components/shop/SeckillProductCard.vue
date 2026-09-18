@@ -16,6 +16,10 @@ defineProps({
     type: Boolean,
     default: false,
   },
+  inCart: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 defineEmits(['buy', 'add-to-cart'])
@@ -60,10 +64,10 @@ function formatMoney(value) {
         <button
           type="button"
           class="btn ghost"
-          :disabled="!loggedIn || product.stock <= 0"
+          :disabled="!loggedIn || product.stock <= 0 || inCart"
           @click="$emit('add-to-cart', product)"
         >
-          加入购物车
+          {{ inCart ? '已加入购物车' : '加入购物车' }}
         </button>
         <button
           type="button"

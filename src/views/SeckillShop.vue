@@ -8,7 +8,7 @@ import { useCart } from '../composables/useCart'
 import EmptyState from '../components/ui/EmptyState.vue'
 import SeckillProductCard from '../components/shop/SeckillProductCard.vue'
 
-const { add } = useCart()
+const { add, items } = useCart()
 
 const products = ref([])
 const loading = ref(false)
@@ -28,6 +28,19 @@ function showToast(msg) {
 }
 
 const loggedIn = computed(() => !!user.value)
+const cartProductIds = computed(() => new Set(items.value.map((item) => item.id)))
+
+function friendlyPurchaseMessage(message = '') {
+  const text = String(message || '').trim()
+  if (!text) return '抢购失败，请稍后重试'
+  if (text.includes('已购买') || text.includes('重复') || text.includes('限购')) {
+    return '您已购买过该商品，每人限购一件'
+  }
+  if (text.includes('库存') || text.includes('售罄')) return '商品库存不足，请刷新后再试'
+  if (text.includes('未开始')) return '秒杀尚未开始，请稍后再试'
+  if (text.includes('已结束')) return '秒杀已经结束'
+  return text
+}
 
 async function loadProducts() {
   loading.value = true
@@ -135,10 +148,10 @@ async function onBuy(product) {
 
   try {
     const data = await seckillBuy(product.id, username)
-    if (data.code === 200) {
+    if (Number(data?.code) === 200) {
       showToast('抢购成功，订单处理中...')
     } else {
-      showToast(data.message)
+      showToast(friendlyPurchaseMessage(data?.message))
       if (productIndex !== -1) {
         products.value[productIndex].stock += 1
       }
@@ -147,7 +160,7 @@ async function onBuy(product) {
     if (productIndex !== -1) {
       products.value[productIndex].stock += 1
     }
-    showToast(e?.message || '抢购失败')
+    showToast(friendlyPurchaseMessage(e?.message))
   } finally {
     buyingId.value = null
   }
@@ -158,8 +171,12 @@ function onAddCart(product) {
     showToast('请先登录')
     return
   }
+  if (cartProductIds.value.has(product.id)) {
+    showToast('该商品已在购物车中，每人限购一件')
+    return
+  }
   const result = add(product, 1)
-  showToast(result.ok ? '已加入购物车' : result.message)
+  showToast(result.ok ? '已加入购物车' : friendlyPurchaseMessage(result.message))
 }
 
 onMounted(async () => {
@@ -266,6 +283,7 @@ onMounted(async () => {
           :time-state="seckillWindow(product)"
           :logged-in="loggedIn"
           :buying="buyingId === product.id"
+          :in-cart="cartProductIds.has(product.id)"
           @add-to-cart="onAddCart"
           @buy="onBuy"
         />

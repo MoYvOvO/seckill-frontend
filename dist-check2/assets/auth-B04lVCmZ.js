@@ -1,0 +1,1 @@
+import{h as e}from"./http-B-l3xpVm.js";function r(t){return e.post("/api/auth/login",t).then(a=>a.data)}function i(t){return e.post("/api/auth/register",t).then(a=>a.data)}function o(){return e.get("/api/auth/me").then(t=>t.data)}export{o as f,r as l,i as r};

@@ -1,0 +1,1 @@
+import{h as r}from"./http-B-l3xpVm.js";function d(){return r.get("/api/products").then(t=>t.data)}function n(t){return r.post("/api/products",t).then(e=>e.data)}function o(t,e){return r.put(`/api/products/${t}`,e).then(a=>a.data)}function c(t){return r.delete(`/api/products/${t}`).then(e=>e.data)}export{n as c,c as d,d as f,o as u};
